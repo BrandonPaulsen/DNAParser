@@ -1,0 +1,16 @@
+{
+  "name": "parserancestrydna",
+  "version": "1.0.0",
+  "description": "DNA parser using snpedia api",
+  "repository": {
+    "type": "git",
+    "url": ".git/git@github.com:BrandonPaulsen/DNAParser.git"
+  },
+  "license": "MIT",
+  "author": "Brandon Paulsen",
+  "type": "commonjs",
+  "main": "parser.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
