@@ -1,6 +1,6 @@
 const path = require("path");
 const fs = require("node:fs");
-const axios = require("axios");
+const Snpedia = require("./Snpedia.js");
 
 // Get name of file (executable after pkg)
 let file = process.argv[1];
@@ -49,4 +49,6 @@ let dnaData = dnaContent.split(/[\r]?\n/).reduce((dnaData, line) => {
     return dnaData;
 }, {snps: {}});
 
-
+const snpedia = new Snpedia();
+//snpedia.medicalConditions().then((data) => console.log(data));
+snpedia.relatedSNPs("Cancer").then((data) => console.log(data));
