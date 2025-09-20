@@ -8,7 +8,7 @@
   },
   "license": "MIT",
   "author": "Brandon Paulsen",
-  "type": "commonjs",
+  "type": "module",
   "main": "parser.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
