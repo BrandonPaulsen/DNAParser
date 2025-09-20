@@ -1,15 +1,21 @@
+import fs from "node:fs";
 import axios from "axios";
 import { DNAData } from "./DNAData.mjs";
 
 export class SNPedia {
-    constructor(dnaFile) {
-        this.dnaData = new DNAData(dnaFile);
+    constructor(dnaFile = false) {
         this.axios = axios.create({
             baseURL: "https://bots.snpedia.com/api.php",
         });
-        this.relatedSNPs = {};
-        this.medicalConditions = null;
         this.snpediaURL = "https://www.snpedia.com/index.php/";
+        if(dnaFile) {
+            this.dnaData = new DNAData(dnaFile);
+            this.relatedSNPs = {};
+            this.medicalConditions = null;
+        } else {
+            this.dnaData = new DNAData();
+            this.deserialize();
+        }
     }
 
     async query(params, extract) {
@@ -87,5 +93,36 @@ export class SNPedia {
             await this.loadRelatedSNPs(medicalCondition);
         }
         return this.relatedSNPs[medicalCondition];
+    }
+
+    async getAllRelatedSNPs() {
+        return this.getMedicalConditions()
+            .then((medicalConditions) => {
+                let index = -1;
+
+                 const getNextMedicalCondition = () => {
+                    if(++index < medicalConditions.length) {
+                        let medicalCondition = this.medicalConditions[index].title;
+                        console.log(`Getting related SNPs for ${medicalCondition}`);
+                        return this.getRelatedSNPs(medicalCondition)
+                            .then(getNextMedicalCondition);
+                    } else {
+                        return true;
+                    }
+                }
+                return getNextMedicalCondition();
+            });
+
+    }
+
+    serialize() {
+        this.dnaData.serialize();
+        fs.writeFileSync("MedicalConditions.json", JSON.stringify(this.medicalConditions));
+        fs.writeFileSync("RelatedSNPs.json", JSON.stringify(this.relatedSNPs));
+    }
+
+    deserialize() {
+        this.medicalConditions = JSON.parse(fs.readFileSync("MedicalConditions.json", "utf-8"));
+        this.relatedSNPs = JSON.parse(fs.readFileSync("RelatedSNPs.json", "utf-8"));
     }
 }

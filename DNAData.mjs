@@ -1,9 +1,13 @@
 import fs from "node:fs";
 
 export class DNAData {
-    constructor(dnaFile) {
-        this.dnaData = null;
-        this.loadDNAFile(dnaFile);
+    constructor(dnaFile = false) {
+        if(dnaFile) {
+            this.dnaData = null;
+            this.loadDNAFile(dnaFile);
+        } else {
+            this.deserialize();
+        }
     }
 
     loadDNAFile(dnaFile) {
@@ -48,5 +52,13 @@ export class DNAData {
 
     hasSNP(rsid) {
         return getSNP(rsid) != null;
+    }
+
+    serialize() {
+        fs.writeFileSync("DNAData.json", JSON.stringify(this.dnaData));
+    }
+    
+    deserialize() {
+        this.dnaData = JSON.parse(fs.readFileSync("DNAData.json", "utf-8"));
     }
 }
