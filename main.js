@@ -1,5 +1,4 @@
 import { SNPedia } from "./SNPedia.mjs";
-import { DNAData } from "./DNAData.mjs";
 const path = import("path");
 
 // Get name of file (executable after pkg)
@@ -13,13 +12,10 @@ if(process.argv.length < 3) {
     process.exit(2);
 }
 
-const snpedia = new SNPedia();
-const dnaData = new DNAData(process.argv[2]);
-snpedia.getMedicalConditions().then((medicalConditions) => {
-    console.log(medicalConditions[medicalConditions.length - 1]);
-});
-//snpedia.medicalConditions().then((medicalConditions) => fs.writeFile("medicalConditions.json", JSON.stringify(medicalConditions), "utf8", (error) => console.log(error)));
-//snpedia.medicalConditions().then((medicalConditions) => {
-    //let index = 0;
-    //snpedia.relatedSNPs(medicalConditions
+const snpedia = new SNPedia(process.argv[2]);
+//snpedia.getMedicalConditions().then((medicalConditions) => {
+    //let medicalCondition = medicalConditions[28].title;
+    //console.log(medicalCondition);
+    //snpedia.getRelatedSNPs(medicalCondition).then((relatedSNPs) => console.log(relatedSNPs));
 //});
+snpedia.getRelatedSNPs("Baldness").then((relatedSNPs) => console.log(relatedSNPs));

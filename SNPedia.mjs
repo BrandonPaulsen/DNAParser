@@ -1,12 +1,15 @@
 import axios from "axios";
+import { DNAData } from "./DNAData.mjs";
 
 export class SNPedia {
-    constructor() {
+    constructor(dnaFile) {
+        this.dnaData = new DNAData(dnaFile);
         this.axios = axios.create({
             baseURL: "https://bots.snpedia.com/api.php",
         });
-        this.relatedSNPS = {};
+        this.relatedSNPs = {};
         this.medicalConditions = null;
+        this.snpediaURL = "https://www.snpedia.com/index.php/";
     }
 
     async query(params, extract) {
@@ -37,8 +40,10 @@ export class SNPedia {
             if(!this.medicalConditions) {
                 this.medicalConditions = [];
             }
-            let medicalConditions = data.query.categorymembers;
-            this.medicalConditions = this.medicalConditions.concat(medicalConditions);
+            data.query.categorymembers.forEach((medicalCondition) => {
+                medicalCondition.link =  this.snpediaURL + medicalCondition.title;
+                this.medicalConditions.push(medicalCondition);
+            });
         });
     }
 
@@ -56,15 +61,29 @@ export class SNPedia {
             "prop": "links",
             "format": "json",
         }, (data) => {
-            let relatedSNPs = data.parse.links
-                .map((link) => link["*"].toLowerCase())
-                .filter((link) => link.startsWith("rs"));
-            this.relatedSNPs[medicalCondition] = this.relatedSNPs.concat(relatedSNPs);
+            if(!Object.hasOwn(this.relatedSNPs, medicalCondition)) {
+                this.relatedSNPs[medicalCondition] = [];
+            }
+            data.parse.links
+                .filter((link) => link["*"].startsWith("Rs"))
+                .forEach((link) => {
+                    let rsid = link["*"].toLowerCase();
+                    let relatedSNP = {
+                        rsid: rsid,
+                        link: this.snpediaURL + rsid,
+                    }
+                    let dnaSNP = this.dnaData.getSNP(rsid);
+                    if(dnaSNP) {
+                        relatedSNP.allele1 = dnaSNP.allele1;
+                        relatedSNP.allele2 = dnaSNP.allele2;
+                    }
+                    this.relatedSNPs[medicalCondition].push(relatedSNP);
+                });
         });
     }
 
-    async relatedSNPs(medicalCondition) {
-        if(!Object.hasOWn(this.relatedSNPs, medicalCondition)) {
+    async getRelatedSNPs(medicalCondition) {
+        if(!Object.hasOwn(this.relatedSNPs, medicalCondition)) {
             await this.loadRelatedSNPs(medicalCondition);
         }
         return this.relatedSNPs[medicalCondition];

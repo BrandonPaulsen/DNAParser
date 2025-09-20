@@ -2,13 +2,13 @@ import fs from "node:fs";
 
 export class DNAData {
     constructor(dnaFile) {
-        this.dnaFile = dnaFile;
         this.dnaData = null;
+        this.loadDNAFile(dnaFile);
     }
 
-    loadDNAFile() {
+    loadDNAFile(dnaFile) {
         let dnaData = fs
-            .readFileSync(this.dnaFile, "utf-8")
+            .readFileSync(dnaFile, "utf-8")
             .split(/[\r]?\n/)
             .reduce((dnaData, line) => {
                 // Ignore comments
@@ -25,12 +25,12 @@ export class DNAData {
                     dnaData.keys = values;
                     return dnaData;
                 }
-
+                
                 // Parse words into object
                 let snp = values.reduce((snp, value, index) => {
                     snp[dnaData.keys[index]] = value;
                     return snp;
-                });
+                }, {});
 
                 dnaData.snps[snp[dnaData.primaryKey]] = snp;
                 return dnaData;
@@ -39,9 +39,14 @@ export class DNAData {
     }
 
     getDNAData() {
-        if(!this.dnaData) {
-            loadDNAData();
-        }
         return this.dnaData;
+    }
+
+    getSNP(rsid) {
+        return this.dnaData.snps[rsid];
+    }
+
+    hasSNP(rsid) {
+        return getSNP(rsid) != null;
     }
 }
