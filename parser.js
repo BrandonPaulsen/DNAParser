@@ -27,7 +27,6 @@ let dnaData = dnaContent.split(/[\r]?\n/).reduce((dnaData, line) => {
     if(line.startsWith("#")) {
         return dnaData;
     }
-
     // Split line into values
     let values = line.split(/\s+/);
     
@@ -50,5 +49,13 @@ let dnaData = dnaContent.split(/[\r]?\n/).reduce((dnaData, line) => {
 }, {snps: {}});
 
 const snpedia = new Snpedia();
-//snpedia.medicalConditions().then((data) => console.log(data));
-snpedia.relatedSNPs("Cancer").then((data) => console.log(data));
+const snpediaData = {};
+
+snpedia.medicalConditions().then((medicalConditions) => {
+    console.log(medicalConditions[medicalConditions.length - 1]);
+});
+//snpedia.medicalConditions().then((medicalConditions) => fs.writeFile("medicalConditions.json", JSON.stringify(medicalConditions), "utf8", (error) => console.log(error)));
+//snpedia.medicalConditions().then((medicalConditions) => {
+    //let index = 0;
+    //snpedia.relatedSNPs(medicalConditions
+//});
