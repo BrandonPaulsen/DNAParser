@@ -1,27 +1,20 @@
 import fs from "node:fs";
 import axios from "axios";
+import * as cheerio from "cheerio";
 import { DNAData } from "./DNAData.mjs";
 
 export class SNPedia {
-    constructor(dnaFile = false) {
+    constructor() {
         this.axios = axios.create({
             baseURL: "https://bots.snpedia.com/api.php",
         });
         this.snpediaURL = "https://www.snpedia.com/index.php/";
-        if(dnaFile) {
-            this.dnaData = new DNAData(dnaFile);
-            this.relatedSNPs = {};
-            this.medicalConditions = null;
-        } else {
-            this.dnaData = new DNAData();
-            this.deserialize();
-        }
     }
 
-    async query(params, extract) {
+    async query(params, extractor) {
         let response = await this.axios.get("", {params});
         let responseData = response.data;
-        extract(responseData);
+        extractor(responseData);
         if(Object.hasOwn(responseData, "continue")) {
             Object.keys(responseData.continue)
                 .filter((key) => key != "continue")
@@ -33,8 +26,12 @@ export class SNPedia {
 
     async continueQuery(params, extractor) {
         while(await this.query(params, extractor)) {}
+        return true;
     }
 
+    /**
+     *  Gets and stores all medicalConditions from snpedia.
+     */
     async loadMedicalConditions() {
         return this.continueQuery({
             "action": "query",
@@ -44,22 +41,21 @@ export class SNPedia {
             "format": "json",
         }, (data) => {
             if(!this.medicalConditions) {
-                this.medicalConditions = [];
+                this.medicalConditions = {};
             }
-            data.query.categorymembers.forEach((medicalCondition) => {
-                medicalCondition.link =  this.snpediaURL + medicalCondition.title;
-                this.medicalConditions.push(medicalCondition);
+            data.query.categorymembers.forEach((link) => {
+                let medicalCondition = link.title;
+                this.medicalConditions[medicalCondition] = {
+                    name: medicalCondition,
+                    link: this.snpediaURL + medicalCondition
+                }
             });
-        });
+        })
     }
 
-    async getMedicalConditions() {
-        if(!this.medicalConditions) {
-            await this.loadMedicalConditions();
-        }
-        return this.medicalConditions;
-    }
-
+    /**
+     *  Gets and stores all SNPs related to medicalCondition from snpedia.
+     */
     async loadRelatedSNPs(medicalCondition) {
         return this.continueQuery({
             "action": "parse",
@@ -67,62 +63,83 @@ export class SNPedia {
             "prop": "links",
             "format": "json",
         }, (data) => {
-            if(!Object.hasOwn(this.relatedSNPs, medicalCondition)) {
-                this.relatedSNPs[medicalCondition] = [];
+            if(!this.medicalConditions[medicalCondition].relatedSNPs) {
+                this.medicalConditions[medicalCondition].relatedSNPs = {};
             }
             data.parse.links
                 .filter((link) => link["*"].startsWith("Rs"))
                 .forEach((link) => {
                     let rsid = link["*"].toLowerCase();
-                    let relatedSNP = {
+                    this.medicalConditions[medicalCondition].relatedSNPs[rsid] = {
                         rsid: rsid,
-                        link: this.snpediaURL + rsid,
-                    }
-                    let dnaSNP = this.dnaData.getSNP(rsid);
-                    if(dnaSNP) {
-                        relatedSNP.allele1 = dnaSNP.allele1;
-                        relatedSNP.allele2 = dnaSNP.allele2;
-                    }
-                    this.relatedSNPs[medicalCondition].push(relatedSNP);
+                        link: this.snpediaURL + rsid
+                    };
                 });
         });
     }
 
-    async getRelatedSNPs(medicalCondition) {
-        if(!Object.hasOwn(this.relatedSNPs, medicalCondition)) {
-            await this.loadRelatedSNPs(medicalCondition);
-        }
-        return this.relatedSNPs[medicalCondition];
-    }
-
-    async getAllRelatedSNPs() {
-        return this.getMedicalConditions()
-            .then((medicalConditions) => {
-                let index = -1;
-
-                 const getNextMedicalCondition = () => {
-                    if(++index < medicalConditions.length) {
-                        let medicalCondition = this.medicalConditions[index].title;
-                        console.log(`Getting related SNPs for ${medicalCondition}`);
-                        return this.getRelatedSNPs(medicalCondition)
-                            .then(getNextMedicalCondition);
-                    } else {
-                        return true;
+    /**
+     *  Gets and stores all information about snps from snpedia.
+     */
+    async loadInfo(medicalCondition, rsid) {
+        return this.continueQuery({
+            "action": "parse",
+            "page": rsid,
+            "prop": "text",
+            "format": "json",
+        }, (data) => {
+            const $ = cheerio.load(data.parse.text["*"]);
+            const extracted = $.extract({
+                smwtable: {
+                    selector: ".smwtable",
+                    value: {
+                        rows: [
+                            {
+                                selector: "tr",
+                                value: {
+                                    cols: [
+                                        {
+                                            selector: "td",
+                                        }
+                                    ]
+                                }
+                            }
+                        ]
                     }
                 }
-                return getNextMedicalCondition();
+            }).smwtable.rows.forEach((row) => {
+                if(!this.medicalConditions[medicalCondition].relatedSNPs[rsid].info) {
+                    this.medicalConditions[medicalCondition].relatedSNPs[rsid].info = {};
+                }
+                let cols = row.cols
+                if(cols.length === 3) {
+                    let genotype = cols[0].trim();
+                    let magnitude = cols[1].trim();
+                    let summary = cols[2].trim();
+                    this.medicalConditions[medicalCondition].relatedSNPs[rsid].info[genotype] = {
+                        genotype: genotype,
+                        magnitude: magnitude,
+                        summary: summary
+                    };
+                }
             });
-
+        });
     }
-
-    serialize() {
-        this.dnaData.serialize();
-        fs.writeFileSync("MedicalConditions.json", JSON.stringify(this.medicalConditions));
-        fs.writeFileSync("RelatedSNPs.json", JSON.stringify(this.relatedSNPs));
-    }
-
-    deserialize() {
-        this.medicalConditions = JSON.parse(fs.readFileSync("MedicalConditions.json", "utf-8"));
-        this.relatedSNPs = JSON.parse(fs.readFileSync("RelatedSNPs.json", "utf-8"));
+    
+    /**
+     * Load all SNpedia information in the correct order.
+     */
+    async syncSNPedia() {
+        console.log("Loading medical conditions");
+        await this.loadMedicalConditions();
+        for(let medicalCondition of Object.keys(this.medicalConditions)) {
+            console.log(`\tLoading related snps for ${medicalCondition}`);
+            await this.loadRelatedSNPs(medicalCondition);
+            for(let rsid of Object.keys(this.medicalConditions[medicalCondition].relatedSNPs)) {
+                console.log(`\t\tLoading info for ${rsid}`);
+                await this.loadInfo(medicalCondition, rsid);
+            }
+        }
+        return true;
     }
 }

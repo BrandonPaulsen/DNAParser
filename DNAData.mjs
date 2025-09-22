@@ -10,7 +10,7 @@ export class DNAData {
         }
     }
 
-    loadDNAFile(dnaFile) {
+    loadDNAData(dnaFile) {
         let dnaData = fs
             .readFileSync(dnaFile, "utf-8")
             .split(/[\r]?\n/)
@@ -36,10 +36,34 @@ export class DNAData {
                     return snp;
                 }, {});
 
-                dnaData.snps[snp[dnaData.primaryKey]] = snp;
+                dnaData[snp[dnaData.primaryKey]] = snp;
                 return dnaData;
-            }, {snps: {}});
+            }, {});
         this.dnaData = dnaData;
+    }
+
+    loadSNPediaData() {
+        this.SNPediaData = JSON.parse(fs.readFileSync("SNPediaData.json", "utf-8"));
+    }
+
+    analyzeDNAData(dnaFile) {
+        this.loadDNAData(dnaFile);
+        this.loadSNPediaData();
+        this.SNPediaData.medicalConditions
+            .reduce((medicalConditionLines, medicalCondition) => {
+                medicalConditionLines.push(`\t${medicalCondition.title} SNPs:`);
+                lines.concat(this.SNPediaData.relatedSNPs[medicalCondition.title].reduce((snpLines, snp) => {
+                    let snpData = this.dnaData[snp.rsid];
+                    if(snpData) {
+                        snpLines.concat([
+                            `\t\t${snp.rsid}:`,
+                            `\t\t\t${snp.link}`,
+                            `\t\t\t${snpData.allele1}, ${snpData.allele2}`,
+                            `\t\t\t${}`,
+1                       ]);
+                    }
+                }, []));
+            }, []);
     }
 
     getDNAData() {
@@ -47,7 +71,7 @@ export class DNAData {
     }
 
     getSNP(rsid) {
-        return this.dnaData.snps[rsid];
+        return this.dnaData[rsid];
     }
 
     hasSNP(rsid) {

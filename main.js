@@ -13,10 +13,5 @@ if(process.argv.length < 3) {
     process.exit(2);
 }
 
-//const snpedia = new SNPedia(process.argv[2]);
-//snpedia.getAllRelatedSNPs()
-    //.then((_) => {
-        //console.log(snpedia.medicalConditions);
-        //console.log(snpedia.relatedSNPs);
-        //snpedia.serialize()
-    //});
+const snpedia = new SNPedia();
+snpedia.syncSNPedia();
