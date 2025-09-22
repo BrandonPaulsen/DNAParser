@@ -43,46 +43,31 @@ export class DNAData {
     }
 
     loadSNPediaData() {
-        this.SNPediaData = JSON.parse(fs.readFileSync("SNPediaData.json", "utf-8"));
+        this.medicalConditions = JSON.parse(fs.readFileSync("SNPediaData.json", "utf-8"));
     }
 
     analyzeDNAData(dnaFile) {
         this.loadDNAData(dnaFile);
         this.loadSNPediaData();
-        this.SNPediaData.medicalConditions
-            .reduce((medicalConditionLines, medicalCondition) => {
-                medicalConditionLines.push(`\t${medicalCondition.title} SNPs:`);
-                lines.concat(this.SNPediaData.relatedSNPs[medicalCondition.title].reduce((snpLines, snp) => {
-                    let snpData = this.dnaData[snp.rsid];
-                    if(snpData) {
-                        snpLines.concat([
-                            `\t\t${snp.rsid}:`,
-                            `\t\t\t${snp.link}`,
-                            `\t\t\t${snpData.allele1}, ${snpData.allele2}`,
-                            `\t\t\t${}`,
-1                       ]);
-                    }
-                }, []));
-            }, []);
-    }
-
-    getDNAData() {
-        return this.dnaData;
-    }
-
-    getSNP(rsid) {
-        return this.dnaData[rsid];
-    }
-
-    hasSNP(rsid) {
-        return getSNP(rsid) != null;
-    }
-
-    serialize() {
-        fs.writeFileSync("DNAData.json", JSON.stringify(this.dnaData));
-    }
-    
-    deserialize() {
-        this.dnaData = JSON.parse(fs.readFileSync("DNAData.json", "utf-8"));
+        let lines = [];
+        Objet.keys(this.medicalConditions)
+            .forEach((medicalCondition) => {
+                lines.push(`${medicalCondition}:`);
+                let relatedSNPs = this.medicalConditions[medicalCondition].relatedSNPs;
+                Object.keys(relatedSNPs)
+                    .forEach((rsid) => {
+                        let snp = this.dnaData[rsid];
+                        if(snp) {
+                            let genotype = `(${snp.allele1};${snp.allele2})`;
+                            let info = relatedSNPs[rsid].info[genotype];
+                            if(info) {
+                                lines.push(`\t${rsid}:`);
+                                lines.push(`\t\t${genotype}`);
+                                lines.push(`\t\t${info.summary}`);
+                            }
+                        }
+                    });
+            });
+        fs.writeFileSync("DNASummary.txt", lines.join("\n"));
     }
 }

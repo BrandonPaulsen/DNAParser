@@ -9,6 +9,7 @@ export class SNPedia {
             baseURL: "https://bots.snpedia.com/api.php",
         });
         this.snpediaURL = "https://www.snpedia.com/index.php/";
+        this.medicalConditions = {};
     }
 
     async query(params, extractor) {
@@ -40,14 +41,12 @@ export class SNPedia {
             "cmlimit": 500,
             "format": "json",
         }, (data) => {
-            if(!this.medicalConditions) {
-                this.medicalConditions = {};
-            }
             data.query.categorymembers.forEach((link) => {
                 let medicalCondition = link.title;
                 this.medicalConditions[medicalCondition] = {
                     name: medicalCondition,
-                    link: this.snpediaURL + medicalCondition
+                    link: this.snpediaURL + medicalCondition,
+                    relatedSNPs: {},
                 }
             });
         })
@@ -63,16 +62,14 @@ export class SNPedia {
             "prop": "links",
             "format": "json",
         }, (data) => {
-            if(!this.medicalConditions[medicalCondition].relatedSNPs) {
-                this.medicalConditions[medicalCondition].relatedSNPs = {};
-            }
             data.parse.links
                 .filter((link) => link["*"].startsWith("Rs"))
                 .forEach((link) => {
                     let rsid = link["*"].toLowerCase();
                     this.medicalConditions[medicalCondition].relatedSNPs[rsid] = {
                         rsid: rsid,
-                        link: this.snpediaURL + rsid
+                        link: this.snpediaURL + rsid,
+                        info: {},
                     };
                 });
         });
@@ -108,9 +105,6 @@ export class SNPedia {
                     }
                 }
             }).smwtable.rows.forEach((row) => {
-                if(!this.medicalConditions[medicalCondition].relatedSNPs[rsid].info) {
-                    this.medicalConditions[medicalCondition].relatedSNPs[rsid].info = {};
-                }
                 let cols = row.cols
                 if(cols.length === 3) {
                     let genotype = cols[0].trim();
@@ -127,7 +121,27 @@ export class SNPedia {
     }
     
     /**
-     * Load all SNpedia information in the correct order.
+     *  Load all SNpedia information in the correct order.
+     *  SNPediaData.json is of the form:
+     *  {
+     *      <medicalCondition>: {
+     *          name: <medicalCondition>,
+     *          link: <link to snpedia>,
+     *          relatedSNPs: {
+     *              <rsid>: {
+     *                  rsid: <rsid>,
+     *                  link: <link to snpedia>,
+     *                  info: {
+     *                      <genotype>: {
+     *                          genotype: <genotype>,
+     *                          magnitude: magnitude,
+     *                          summary: summary
+     *                      }
+     *                  }
+     *              }
+     *          }
+     *      }
+     *  }
      */
     async syncSNPedia() {
         console.log("Loading medical conditions");
@@ -140,6 +154,7 @@ export class SNPedia {
                 await this.loadInfo(medicalCondition, rsid);
             }
         }
+        fs.writeFileSync(JSON.stringify("SNPediaData.json", this.medicalConditions));
         return true;
     }
 }
