@@ -3,49 +3,36 @@ import path from "path";
 
 class DNAData {
     constructor(dnaFile = false) {
-        this.dnaData = null;
-        this.loadDNAData(dnaFile);
+        this.dnaData = {};
+        this.loadAncestryData(dnaFile);
+        this.loadSNPediaData();
         this.analyzeDNAData();
     }
 
-    loadDNAData(dnaFile) {
-        let dnaData = fs
-            .readFileSync(dnaFile, "utf-8") .split(/[\r]?\n/)
-            .reduce((dnaData, line) => {
-                // Ignore comments
-                if(line.startsWith("#")) {
-                    return dnaData;
+    loadAncestryData(ancestryFile) {
+        // Extract, format, and store data
+        let lines = fs
+            .readFileSync(ancestryFile, "utf-8")
+            .split(/[\r]?\n/)
+            .filter((line) => !line.startsWith("#"))
+            .slice(1)
+            .map((line) => line.split(/\s+/))
+            .map((line) => {
+                return {
+                    rsid: line[0],
+                    chromosome: line[1],
+                    position: line[2],
+                    genotype: `(${line[3]};${line[4]})`,
                 }
-
-                // Split line into values
-                let values = line.split(/\s+/);
-
-                // First non-comment line is keys
-                if(!Object.hasOwn(dnaData, "keys")) {
-                    dnaData.primaryKey = values[0];
-                    dnaData.keys = values;
-                    return dnaData;
-                }
-                
-                // Parse words into object
-                let snp = values.reduce((snp, value, index) => {
-                    snp[dnaData.keys[index]] = value;
-                    return snp;
-                }, {});
-
-                dnaData[snp[dnaData.primaryKey]] = snp;
-                return dnaData;
-            }, {});
-        this.dnaData = dnaData;
+            })
+            .forEach((snp) => this.dnaData[snp.rsid] = snp);
     }
 
     loadSNPediaData() {
         this.medicalConditions = JSON.parse(fs.readFileSync("SNPediaData.json", "utf-8"));
     }
 
-    analyzeDNAData(dnaFile) {
-        this.loadSNPediaData();
-        let lines = [];
+    analyzeDNAData() {
         let invalidSummaries = [
             "",
             "common in clinvar",
@@ -58,37 +45,37 @@ class DNAData {
             "common genotype",
             "normal risk",
         ];
-        Object.keys(this.medicalConditions)
-            .forEach((medicalCondition) => {
-                if(medicalCondition === "loadedMedicalConditions") {
-                    return;
+        let dnaSummary = Object
+            .keys(this.medicalConditions)
+            .filter((medicalCondition) => medicalCondition != "loadedMedicalConditions")
+            .map((medicalCondition) => this.medicalConditions[medicalCondition])
+            .map((medicalConditionInformation) => {
+                let relatedSNPInformation = Object
+                    .values(medicalConditionInformation.relatedSNPs)
+                    .filter((snp) => Object.hasOwn(this.dnaData, snp.rsid))
+                    .filter((snp) => Object.hasOwn(snp.info, this.dnaData[snp.rsid].genotype))
+                    .filter((snp) => !invalidSummaries.includes(snp.info.summary))
+                    .map((snp) => {
+                        let info = snp.info[this.dnaData[snp.rsid].genotype];
+                        return [
+                            `\tRSID: ${snp.rsid}`,
+                            `\t\tGenotype: ${info.genotype}`,
+                            `\t\tMagnitude: ${info.magnitude}`,
+                            `\t\tSummary: ${info.summary}`,,
+                        ]
+                        .join("\n");
+                    }).join("\n");
+                return {
+                    medicalCondition: medicalConditionInformation.name,
+                    relatedSNPInformation: relatedSNPInformation,
                 }
-                lines.push(`${medicalCondition}:`);
-                let hasSNPs = false;
-                let relatedSNPs = this.medicalConditions[medicalCondition].relatedSNPs;
-                Object.keys(relatedSNPs)
-                    .forEach((rsid) => {
-                        let snp = this.dnaData[rsid];
-                        if(snp) {
-                            let genotype = `(${snp.allele1};${snp.allele2})`;
-                            let info = relatedSNPs[rsid].info[genotype];
-                            if(info && !invalidSummaries.includes(info.summary)) {
-                                hasSNPs = true;
-                                lines.push(`\t${rsid}:`);
-                                lines.push(`\t\t${genotype}`);
-                                lines.push(`\t\t${info.magnitude} magnitude`);
-                                lines.push(`\t\t${info.summary}`);
-                            }
-                        }
-                    });
-                if(!hasSNPs) {
-                    lines.push("\tNo related data found");
-                }
-            });
-        fs.writeFileSync("DNASummary.txt", lines.join("\n"));
+            })
+            .filter((medicalConditionInformation) => medicalConditionInformation.relatedSNPInformation != "")
+            .map((medicalConditionInformation) => `${medicalConditionInformation.medicalCondition}\n${medicalConditionInformation.relatedSNPInformation}`)
+            .join("\n");
+        fs.writeFileSync("DNASummary.txt", dnaSummary);
     }
 }
-
 
 // Make sure there is a file argument
 if(process.argv.length < 3) {
