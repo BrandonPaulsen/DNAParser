@@ -1,19 +1,16 @@
 import fs from "node:fs";
+import path from "path";
 
-export class DNAData {
+class DNAData {
     constructor(dnaFile = false) {
-        if(dnaFile) {
-            this.dnaData = null;
-            this.loadDNAFile(dnaFile);
-        } else {
-            this.deserialize();
-        }
+        this.dnaData = null;
+        this.loadDNAData(dnaFile);
+        this.analyzeDNAData();
     }
 
     loadDNAData(dnaFile) {
         let dnaData = fs
-            .readFileSync(dnaFile, "utf-8")
-            .split(/[\r]?\n/)
+            .readFileSync(dnaFile, "utf-8") .split(/[\r]?\n/)
             .reduce((dnaData, line) => {
                 // Ignore comments
                 if(line.startsWith("#")) {
@@ -47,12 +44,27 @@ export class DNAData {
     }
 
     analyzeDNAData(dnaFile) {
-        this.loadDNAData(dnaFile);
         this.loadSNPediaData();
         let lines = [];
-        Objet.keys(this.medicalConditions)
+        let invalidSummaries = [
+            "",
+            "common in clinvar",
+            "average",
+            "common in complete genomics",
+            "normal",
+            "common/normal",
+            "None",
+            "common",
+            "common genotype",
+            "normal risk",
+        ];
+        Object.keys(this.medicalConditions)
             .forEach((medicalCondition) => {
+                if(medicalCondition === "loadedMedicalConditions") {
+                    return;
+                }
                 lines.push(`${medicalCondition}:`);
+                let hasSNPs = false;
                 let relatedSNPs = this.medicalConditions[medicalCondition].relatedSNPs;
                 Object.keys(relatedSNPs)
                     .forEach((rsid) => {
@@ -60,14 +72,33 @@ export class DNAData {
                         if(snp) {
                             let genotype = `(${snp.allele1};${snp.allele2})`;
                             let info = relatedSNPs[rsid].info[genotype];
-                            if(info) {
+                            if(info && !invalidSummaries.includes(info.summary)) {
+                                hasSNPs = true;
                                 lines.push(`\t${rsid}:`);
                                 lines.push(`\t\t${genotype}`);
+                                lines.push(`\t\t${info.magnitude} magnitude`);
                                 lines.push(`\t\t${info.summary}`);
                             }
                         }
                     });
+                if(!hasSNPs) {
+                    lines.push("\tNo related data found");
+                }
             });
         fs.writeFileSync("DNASummary.txt", lines.join("\n"));
     }
 }
+
+
+// Make sure there is a file argument
+if(process.argv.length < 3) {
+    console.log(`USAGE: node ${file} <DNA FILE>`);
+    process.exit(2);
+}
+
+// Get name of file (executable after pkg)
+let file = process.argv[2];
+file = file.split(path.sep);
+file = file[file.length - 1];
+
+const dnaData = new DNAData(file);
